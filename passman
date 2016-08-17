@@ -26,14 +26,19 @@ die() {
 
 # save user identity variable
 init_pass() {
+	mkdir $PASSWORD_ROOT
 	read -p "enter an identity to use: " USER_IDENT 
+	read -p "enter git address (leave empty to remove syncing): " GIT_PATH 
 
+	# clone passwords from git if provided
+	[[ -n "$GIT_PATH" ]] && \
+		git clone "$GIT_PATH" "$PASSWORD_ROOT"
 	# check if an identity exists
 	gpg --list-key $USER_IDENT >/dev/null 
 	# if an identity exists
 	if [[ $? -eq 0 ]]; then
 		# save identity
-		echo "USER_IDENT=$USER_IDENT"\
+		echo -e "USER_IDENT=${USER_IDENT}\nGIT_PATH=${GIT_PATH}" \
 			 > $PASSWORD_ROOT/.passman.conf
 	else
 		die "failed to init" \
@@ -41,17 +46,52 @@ init_pass() {
 	fi
 }
 
+git_check_update() {
+	[[ -n "$GIT_PATH" ]] && (
+		echo "checking for git changes..."
+		git pull >/dev/null 2>/dev/null
+	)
+}
+
+# $1 message
+# $2 changed file
+git_push_change() {
+	[[ -n "$GIT_PATH" ]] && (
+		echo "syncing changes... "
+		echo "$1 $2"
+		cd $PASSWORD_ROOT
+		git add .
+		git commit -m "$1 $2"
+		git push >/dev/null 2>/dev/null
+	)
+
+}
+
 decrypt_pass() {
-	gpg2 --decrypt "${PASSWORD_ROOT}/${1}" 2>/dev/null
+	gpg2 \
+		--armor \
+		--decrypt \
+		"${PASSWORD_ROOT}/${1}" \
+		2>/dev/null
 }
 
 encrypt_pass_tofile() {
+	echo ""
+	git_check_update
 	gpg2 \
+		--armor \
 		--encrypt \
 		--recipient $USER_IDENT \
 		<<< "$1" \
 		> "${PASSWORD_ROOT}/${2}"
 	echo ""
+	git_push_change "added:" "$2"
+}
+
+delete_pass() {
+	git_check_update
+	rm -rf "${PASSWORD_ROOT}/${1}"
+	git_push_change "removed:" "$1"
 }
 
 # extracts the directory path
@@ -59,22 +99,17 @@ get_dir() {
 	sed 's|\(.*\)/.*|\1|g' <<< "$1"
 }
 
-
-
 # save password at given path
 encrypt_pass() {
-	# escape double dots
-	arg_path=${1//./\\.}
-
 	# check if arg was given
 	[[ -z $1 ]] && die "no argument given"
 
 	# check if arg is a dir
-	[[ -d ${PASSWORD_ROOT}/${arg_path} ]] \
+	[[ -d ${PASSWORD_ROOT}/${1} ]] \
 		&& die "argument is a directory"
 
 	# create dir if it doesn't exist
-	dir_path=`get_dir ${PASSWORD_ROOT}/${arg_path}`
+	dir_path=`get_dir ${PASSWORD_ROOT}/${1}`
 	if [[ ! -d "$dir_path" ]];then 
 		mkdir -p $dir_path
 		# mkdir failed for some reason? exit
@@ -84,7 +119,7 @@ encrypt_pass() {
 
 	read -s -p "enter password to store: " password
 	# save password to file at given path
-	encrypt_pass_tofile "$password" "$arg_path"
+	encrypt_pass_tofile "$password" "$1"
 }
 
 list_passwords() {
@@ -97,7 +132,6 @@ list_passwords() {
 
 if [[ "$1" == "init" ]]; then
 	rm -rf $PASSWORD_ROOT
-	mkdir $PASSWORD_ROOT
 	init_pass
 	exit 0
 fi
@@ -112,7 +146,6 @@ if [[ -d "$PASSWORD_ROOT" ]]; then
 	fi
 else
 	echo "Initializing password manager..."
-	mkdir $PASSWORD_ROOT
 	init_pass
 fi
 
@@ -122,17 +155,17 @@ case $1 in
 		[[ -f "${PASSWORD_ROOT}/${2//./\\.}" ]] &&\
 			die "password already exists" \
 				"\nuse the set command to change it"
-		encrypt_pass $2
+		encrypt_pass ${2//./\\.}
 		;;
 	get)
-		decrypt_pass $2
+		decrypt_pass ${2//./\\.}
 		;;
 	set)
 		# don't care if file exists or not
-		encrypt_pass $2
+		encrypt_pass ${2//./\\.}
 		;;
 	del|remove)
-		rm ${PASSWORD_ROOT}/$2
+		delete_pass ${2//./\\.}
 		;;
 	ls|list)
 		list_passwords
