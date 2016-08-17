@@ -42,11 +42,11 @@ init_pass() {
 }
 
 decrypt_pass() {
-	gpg --decrypt "${PASSWORD_ROOT}/${1}" 2>/dev/null
+	gpg2 --decrypt "${PASSWORD_ROOT}/${1}" 2>/dev/null
 }
 
 encrypt_pass_tofile() {
-	gpg \
+	gpg2 \
 		--encrypt \
 		--recipient $USER_IDENT \
 		<<< "$1" \
