@@ -15,6 +15,7 @@
 # limitations under the License.
 
 PASSWORD_ROOT="$HOME/.passman_passwords"
+GPG=gpg2
 
 # HELPER FUNCTIONS
 
@@ -31,15 +32,18 @@ init_pass() {
 	read -p "enter git address (leave empty to remove syncing): " GIT_PATH 
 
 	# clone passwords from git if provided
-	[[ -n "$GIT_PATH" ]] && \
+    if [[ -n "$GIT_PATH" ]]; then
 		git clone "$GIT_PATH" "$PASSWORD_ROOT"
+    fi
 	# check if an identity exists
-	gpg --list-key $USER_IDENT >/dev/null 
+	$GPG --list-key $USER_IDENT > /dev/null 
 	# if an identity exists
 	if [[ $? -eq 0 ]]; then
 		# save identity
-		echo -e "USER_IDENT=${USER_IDENT}\nGIT_PATH=${GIT_PATH}" \
-			 > $PASSWORD_ROOT/.passman.conf
+		( 
+            echo "USER_IDENT=${USER_IDENT}"
+            echo "GIT_PATH=${GIT_PATH}"
+        ) > $PASSWORD_ROOT/.passman.conf
 	else
 		die "failed to init" \
 			"\n${USER_IDENT} is not a valid identity"
@@ -49,7 +53,7 @@ init_pass() {
 git_check_update() {
 	[[ -n "$GIT_PATH" ]] && (
 		echo "checking for git changes..."
-		git pull >/dev/null 2>/dev/null
+		git pull > /dev/null
 	)
 }
 
@@ -61,14 +65,13 @@ git_push_change() {
 		echo "$1 $2"
 		cd $PASSWORD_ROOT
 		git add .
-		git commit -m "$1 $2"
-		git push >/dev/null 2>/dev/null
-	)
-
+		git commit -m "$1 $2" > /dev/null
+		git push > /dev/null
+    )
 }
 
 decrypt_pass() {
-	gpg2 \
+	$GPG \
 		--armor \
 		--decrypt \
 		"${PASSWORD_ROOT}/${1}" \
@@ -78,7 +81,7 @@ decrypt_pass() {
 encrypt_pass_tofile() {
 	echo ""
 	git_check_update
-	gpg2 \
+	$GPG \
 		--armor \
 		--encrypt \
 		--recipient $USER_IDENT \
@@ -109,9 +112,9 @@ encrypt_pass() {
 		&& die "argument is a directory"
 
 	# create dir if it doesn't exist
-	dir_path=`get_dir ${PASSWORD_ROOT}/${1}`
+	dir_path=`get_dir "${PASSWORD_ROOT}/${1}"`
 	if [[ ! -d "$dir_path" ]];then 
-		mkdir -p $dir_path
+		mkdir -p $dir_path 2> /dev/null
 		# mkdir failed for some reason? exit
 		[[ $? -gt 0 ]] \
 			&& die "could not create directory structure"
