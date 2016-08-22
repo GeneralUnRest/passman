@@ -19,6 +19,21 @@ GPG=gpg2
 
 # HELPER FUNCTIONS
 
+# usage info
+usage() {
+    echo ""
+    echo "Usage: $0 command <path/to/password/file>"
+    echo ""
+    echo "  command | new    - create a new password entry"
+    echo "          | get    - get a password"
+    echo "          | set    - set a password"
+    echo "          | del    - remove a password"
+    echo "          | ls     - list all passwords"
+    echo "          | init   - reset manager"
+    echo ""
+    exit 1
+}
+
 # terminate program with message
 die() {
     echo -e "$@"
@@ -108,16 +123,16 @@ encrypt_pass() {
     [[ -z $1 ]] && die "no argument given"
 
     # check if arg is a dir
-    [[ -d ${PASSWORD_ROOT}/${1} ]] \
-        && die "argument is a directory"
+    [[ -d ${PASSWORD_ROOT}/${1} ]] && \
+        die "argument is a directory"
 
     # create dir if it doesn't exist
     dir_path=`get_dir "${PASSWORD_ROOT}/${1}"`
     if [[ ! -d "$dir_path" ]];then 
         mkdir -p $dir_path 2> /dev/null
         # mkdir failed for some reason? exit
-        [[ $? -gt 0 ]] \
-            && die "could not create directory structure"
+        [[ $? -gt 0 ]] && \
+            die "could not create directory structure"
     fi
 
     read -s -p "enter password to store: " password
@@ -155,9 +170,9 @@ fi
 case $1 in
     new|create)
         # if file already exists, exit
-        [[ -f "${PASSWORD_ROOT}/${2//./\\.}" ]] &&\
+        [[ -f "${PASSWORD_ROOT}/${2//./\\.}" ]] && \
             die "password already exists" \
-                "\nuse the set command to change it"
+                "\ntype help for usage"
         encrypt_pass ${2//./\\.}
         ;;
     get)
@@ -174,13 +189,7 @@ case $1 in
         list_passwords
         ;;
     *)
-        echo "Usage: $0 command <path/to/password/file>"
-        echo ""
-        echo "  command | new    - create a new password entry"
-        echo "          | get    - get a password"
-        echo "          | set    - set a password"
-        echo "          | del    - remove a password"
-        echo "          | ls     - list all passwords"
-        echo "          | init   - reset manager"
+        echo "invalid command"
+        usage
         ;;
 esac
