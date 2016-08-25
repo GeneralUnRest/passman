@@ -28,6 +28,7 @@ usage() {
     echo "          | get    - get a password"
     echo "          | set    - set a password"
     echo "          | del    - remove a password"
+    echo "          | doc    - add document or heredoc"
     echo "          | ls     - list all passwords"
     echo "          | init   - reset manager"
     echo ""
@@ -84,7 +85,23 @@ git_push_change() {
         git push > /dev/null
     )
 }
+# encrypt standard in instead of pass prompt
+# useful for say, a document containing
+# security answers and the like
+# $1 - path in password store
+add_doc() {
+    git_check_update
+    $GPG \
+        --armor \
+        --encrypt \
+        --recipient $USER_IDENT \
+        < /dev/stdin \
+        > "${PASSWORD_ROOT}/${1}"
+    git_push_change "added doc:" "$1"
+}
 
+# decrypt given file
+# $1 - path in password store
 decrypt_pass() {
     $GPG \
         --armor \
@@ -93,8 +110,10 @@ decrypt_pass() {
         2>/dev/null
 }
 
+# encrypt arg to file at path
+# $1 - the password
+# $2 - the path to the password
 encrypt_pass_tofile() {
-    echo ""
     git_check_update
     $GPG \
         --armor \
@@ -102,10 +121,11 @@ encrypt_pass_tofile() {
         --recipient $USER_IDENT \
         <<< "$1" \
         > "${PASSWORD_ROOT}/${2}"
-    echo ""
     git_push_change "added:" "$2"
 }
 
+# delete a password from the store
+# $1 - path in password store
 delete_pass() {
     git_check_update
     rm -rf "${PASSWORD_ROOT}/${1}"
@@ -113,11 +133,14 @@ delete_pass() {
 }
 
 # extracts the directory path
+# $1 - the path string, sans the last route
 get_dir() {
     sed 's|\(.*\)/.*|\1|g' <<< "$1"
 }
 
 # save password at given path
+# $1 - path to save password at
+# $2 - flag to indicate to read from stdin
 encrypt_pass() {
     # check if arg was given
     [[ -z $1 ]] && die "no argument given"
@@ -135,11 +158,16 @@ encrypt_pass() {
             die "could not create directory structure"
     fi
 
-    read -s -p "enter password to store: " password
-    # save password to file at given path
-    encrypt_pass_tofile "$password" "$1"
+    # prompt or save given pass
+    if [[ -z "$2" ]]; then
+        read -s -p "enter password to store: " password
+        encrypt_pass_tofile "$password" "$1"
+    else
+       add_doc "$1" 
+    fi
 }
 
+# lists password store as tree structure
 list_passwords() {
     tree --noreport $PASSWORD_ROOT 2>/dev/null
     # if tree command not found run ls recursively
@@ -184,6 +212,9 @@ case $1 in
         ;;
     del|remove)
         delete_pass ${2//./\\.}
+        ;;
+    doc|document)
+        encrypt_pass ${2//./\\.} "doc"
         ;;
     ls|list)
         list_passwords
