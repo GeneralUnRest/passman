@@ -43,23 +43,22 @@ die() {
 
 # save user identity variable
 init_pass() {
-    mkdir $PASSWORD_ROOT
-    read -p "enter an identity to use: " USER_IDENT 
-    read -p "enter git address (leave empty to remove syncing): " GIT_PATH 
+    mkdir "$PASSWORD_ROOT"
+    read -r -p "enter an identity to use: " USER_IDENT 
+    read -r -p "enter git address (leave empty to remove syncing): " GIT_PATH 
 
     # clone passwords from git if provided
     if [[ -n "$GIT_PATH" ]]; then
         git clone "$GIT_PATH" "$PASSWORD_ROOT"
     fi
     # check if an identity exists
-    $GPG --list-key $USER_IDENT > /dev/null 
+    $GPG --list-key "$USER_IDENT" > /dev/null 
     # if an identity exists
     if [[ $? -eq 0 ]]; then
         # save identity
-        ( 
-            echo "USER_IDENT=${USER_IDENT}"
-            echo "GIT_PATH=${GIT_PATH}"
-        ) > $PASSWORD_ROOT/.passman.conf
+        ( echo "USER_IDENT=${USER_IDENT}"
+          echo "GIT_PATH=${GIT_PATH}"
+        ) > "$PASSWORD_ROOT/.passman.conf"
     else
         die "failed to init" \
             "\n${USER_IDENT} is not a valid identity"
@@ -79,7 +78,8 @@ git_push_change() {
     [[ -n "$GIT_PATH" ]] && (
         echo "syncing changes... "
         echo "$1 $2"
-        cd $PASSWORD_ROOT
+        cd "$PASSWORD_ROOT" \
+            || die "$PASSWORD_ROOT is dead???"
         git add .
         git commit -m "$1 $2" > /dev/null
         git push > /dev/null
@@ -94,7 +94,7 @@ add_doc() {
     $GPG \
         --armor \
         --encrypt \
-        --recipient $USER_IDENT \
+        --recipient "$USER_IDENT" \
         < /dev/stdin \
         > "${PASSWORD_ROOT}/${1}"
     git_push_change "added doc:" "$1"
@@ -118,7 +118,7 @@ encrypt_pass_tofile() {
     $GPG \
         --armor \
         --encrypt \
-        --recipient $USER_IDENT \
+        --recipient "$USER_IDENT" \
         <<< "$1" \
         > "${PASSWORD_ROOT}/${2}"
     git_push_change "added:" "$2"
@@ -128,7 +128,8 @@ encrypt_pass_tofile() {
 # $1 - path in password store
 delete_pass() {
     git_check_update
-    rm -rf "${PASSWORD_ROOT}/${1}"
+    rm -rf "${PASSWORD_ROOT:?}/${1}"
+    [[ $? -eq 0 ]] || die "password root was unset???"
     git_push_change "removed:" "$1"
 }
 
@@ -150,9 +151,9 @@ encrypt_pass() {
         die "argument is a directory"
 
     # create dir if it doesn't exist
-    dir_path=`get_dir "${PASSWORD_ROOT}/${1}"`
+    dir_path=$(get_dir "${PASSWORD_ROOT}/${1}")
     if [[ ! -d "$dir_path" ]];then 
-        mkdir -p $dir_path 2> /dev/null
+        mkdir -p "$dir_path" 2> /dev/null
         # mkdir failed for some reason? exit
         [[ $? -gt 0 ]] && \
             die "could not create directory structure"
@@ -160,7 +161,7 @@ encrypt_pass() {
 
     # prompt or save given pass
     if [[ -z "$2" ]]; then
-        read -s -p "enter password to store: " password
+        read -r -s -p "enter password to store: " password
         encrypt_pass_tofile "$password" "$1"
     else
        add_doc "$1" 
@@ -169,15 +170,15 @@ encrypt_pass() {
 
 # lists password store as tree structure
 list_passwords() {
-    tree --noreport $PASSWORD_ROOT 2>/dev/null
+    tree --noreport "$PASSWORD_ROOT" 2>/dev/null
     # if tree command not found run ls recursively
-    [[ $? -gt 0 ]] && ls -R $PASSWORD_ROOT
+    [[ $? -gt 0 ]] && ls -R "$PASSWORD_ROOT"
 }
 
 # START OF PROGRAM
 
 if [[ "$1" == "init" ]]; then
-    rm -rf $PASSWORD_ROOT
+    rm -rf "$PASSWORD_ROOT"
     init_pass
     exit 0
 fi
@@ -185,7 +186,8 @@ fi
 # get user identity set at init
 if [[ -d "$PASSWORD_ROOT" ]]; then
     if [[ -f "$PASSWORD_ROOT/.passman.conf" ]]; then
-        . ${PASSWORD_ROOT}/.passman.conf
+        # shellcheck source=/dev/null
+        . "${PASSWORD_ROOT}/.passman.conf"
     else
         echo "Initializing password manager..."
         init_pass
@@ -201,20 +203,20 @@ case $1 in
         [[ -f "${PASSWORD_ROOT}/${2//./\\.}" ]] && \
             die "password already exists" \
                 "\ntype help for usage"
-        encrypt_pass ${2//./\\.}
+        encrypt_pass "${2//./\\.}"
         ;;
     get)
-        decrypt_pass ${2//./\\.}
+        decrypt_pass "${2//./\\.}"
         ;;
     set)
         # don't care if file exists or not
-        encrypt_pass ${2//./\\.}
+        encrypt_pass "${2//./\\.}"
         ;;
     del|remove)
-        delete_pass ${2//./\\.}
+        delete_pass "${2//./\\.}"
         ;;
     doc|document)
-        encrypt_pass ${2//./\\.} "doc"
+        encrypt_pass "${2//./\\.}" "doc"
         ;;
     ls|list)
         list_passwords
