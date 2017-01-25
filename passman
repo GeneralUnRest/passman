@@ -21,17 +21,22 @@ GPG=gpg2
 
 # usage info
 usage() {
-    echo ""
-    echo "Usage: $0 command <path/to/password/file>"
-    echo ""
-    echo "  command | new    - create a new password entry"
-    echo "          | get    - get a password"
-    echo "          | set    - set a password"
-    echo "          | del    - remove a password"
-    echo "          | doc    - add document or heredoc"
-    echo "          | ls     - list all passwords"
-    echo "          | init   - reset manager"
-    echo ""
+    cat >&2 << EOF
+
+Usage: $0 command <path/to/password/file>
+
+  command | new    - create a new password entry
+          | get    - get a password
+          | set    - set a password
+          | del    - remove a password
+          | doc    - add document or heredoc
+          | ls     - list all passwords
+          | init   - reset manager
+
+Password file path is relative to $PASSWORD_ROOT
+This program does not care about the use of double dots (..) paths
+Use of these relative paths, globs, etc at your own risk
+EOF
     exit 1
 }
 
